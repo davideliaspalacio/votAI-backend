@@ -46,4 +46,13 @@ export class StartSessionDto {
   @IsString()
   @IsNotEmpty()
   initial_preference!: string;
+
+  @ApiProperty({
+    example: 'a1b2c3d4e5',
+    description: 'Hash del dispositivo para rate limiting',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  device_hash?: string;
 }

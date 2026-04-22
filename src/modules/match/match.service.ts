@@ -366,7 +366,14 @@ export class MatchService {
         program_page: number | null;
       }[] = [];
 
-      for (const score of scores.filter((s) => s.rank <= 3)) {
+      // Top 3 + candidato elegido (si no está en top 3)
+      const initialPref = session?.initial_preference;
+      const axesCandidates = scores.filter((s) =>
+        s.rank <= 3 ||
+        (initialPref && s.candidateId === initialPref),
+      );
+
+      for (const score of axesCandidates) {
         const posDetails = candidatePositionDetails.get(score.candidateId);
         if (!posDetails) continue;
 
