@@ -43,7 +43,7 @@ export class QuestionsService {
     // Traer todas las preguntas activas
     const { data: allQuestions, error: qErr } = await db
       .from('questions')
-      .select('id, text, axis, context')
+      .select('id, text, axis, context, options')
       .eq('active', true);
 
     if (qErr) throw qErr;
@@ -82,12 +82,16 @@ export class QuestionsService {
       .eq('id', sessionId);
 
     return {
-      questions: selected.map((q) => ({
-        id: q.id,
-        text: q.text,
-        axis: q.axis,
-        context: q.context ?? undefined,
-      })),
+      questions: selected.map((q) => {
+        const row = q as Record<string, unknown>;
+        return {
+          id: q.id,
+          text: q.text,
+          axis: q.axis,
+          context: q.context ?? undefined,
+          options: (row.options as { label: string; value: number }[]) ?? undefined,
+        };
+      }),
     };
   }
 
@@ -95,18 +99,22 @@ export class QuestionsService {
     const { data, error } = await this.supabaseService
       .getClient()
       .from('questions')
-      .select('id, text, axis, context')
+      .select('id, text, axis, context, options')
       .in('id', ids);
 
     if (error) throw error;
 
     return {
-      questions: (data ?? []).map((q) => ({
-        id: q.id,
-        text: q.text,
-        axis: q.axis,
-        context: q.context ?? undefined,
-      })),
+      questions: (data ?? []).map((q) => {
+        const row = q as Record<string, unknown>;
+        return {
+          id: q.id,
+          text: q.text,
+          axis: q.axis,
+          context: q.context ?? undefined,
+          options: (row.options as { label: string; value: number }[]) ?? undefined,
+        };
+      }),
     };
   }
 
@@ -115,19 +123,23 @@ export class QuestionsService {
     const { data, error } = await this.supabaseService
       .getClient()
       .from('questions')
-      .select('id, text, axis, context')
+      .select('id, text, axis, context, options')
       .eq('active', true)
       .order('sort_order', { ascending: true });
 
     if (error) throw error;
 
     return {
-      questions: (data ?? []).map((q) => ({
-        id: q.id,
-        text: q.text,
-        axis: q.axis,
-        context: q.context ?? undefined,
-      })),
+      questions: (data ?? []).map((q) => {
+        const row = q as Record<string, unknown>;
+        return {
+          id: q.id,
+          text: q.text,
+          axis: q.axis,
+          context: q.context ?? undefined,
+          options: (row.options as { label: string; value: number }[]) ?? undefined,
+        };
+      }),
     };
   }
 }
