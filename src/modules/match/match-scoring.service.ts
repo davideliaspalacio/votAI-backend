@@ -35,8 +35,8 @@ export class MatchScoringService {
         const stance = positions.get(answer.axis);
         if (stance === undefined) continue;
 
-        const distance = Math.abs(answer.value - stance); // 0-4
-        const similarity = 1 - distance / 4; // 0-1
+        const distance = Math.abs(answer.value - stance); // 0-6
+        const similarity = 1 - distance / 6; // 0-1
         const weighted = similarity * answer.weight;
 
         totalWeighted += weighted;

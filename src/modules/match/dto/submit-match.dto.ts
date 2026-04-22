@@ -20,7 +20,7 @@ export class AnswerDto {
   @ApiProperty({ example: 4, minimum: 1, maximum: 5 })
   @IsInt()
   @Min(1)
-  @Max(5)
+  @Max(7)
   value!: number;
 
   @ApiProperty({ example: 3, minimum: 1, maximum: 3 })
