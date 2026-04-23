@@ -11,6 +11,16 @@ export class StatsService {
     private readonly configService: ConfigService,
   ) {}
 
+  async getSessionCount() {
+    const { count } = await this.supabaseService
+      .getClient()
+      .from('sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'done');
+
+    return { total_sessions: count ?? 0 };
+  }
+
   async getPublicStats() {
     const enabled = this.configService.get<boolean>('ENABLE_PUBLIC_STATS', true);
     if (!enabled) {

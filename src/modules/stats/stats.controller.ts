@@ -22,4 +22,11 @@ export class StatsController {
   async getPublicStats() {
     return this.statsService.getPublicStats();
   }
+
+  @Get('count')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  @ApiOperation({ summary: 'Total de sesiones completadas' })
+  async getSessionCount() {
+    return this.statsService.getSessionCount();
+  }
 }
