@@ -37,12 +37,14 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // Swagger
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: { persistAuthorization: true },
-    customSiteTitle: 'VotoLoco API Docs',
-  });
+  // Swagger (solo en desarrollo)
+  if (configService.get<string>('NODE_ENV') !== 'production') {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+      customSiteTitle: 'VotoLoco API Docs',
+    });
+  }
 
   const port = configService.get<number>('PORT', 4000);
   await app.listen(port);

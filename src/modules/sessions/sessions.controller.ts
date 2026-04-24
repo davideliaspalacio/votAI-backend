@@ -1,17 +1,12 @@
 import {
   Controller,
   Post,
-  Delete,
   Body,
-  Param,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiParam,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { SessionsService } from './sessions.service';
@@ -30,17 +25,5 @@ export class SessionsController {
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   async start(@Body() dto: StartSessionDto): Promise<SessionResponseDto> {
     return this.sessionsService.startSession(dto);
-  }
-
-  @Delete(':sessionId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({
-    summary: 'Elimina una sesión (derecho de supresión - Ley 1581)',
-  })
-  @ApiParam({ name: 'sessionId', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
-  @ApiResponse({ status: 204, description: 'Sesión eliminada' })
-  @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
-  async delete(@Param('sessionId') sessionId: string): Promise<void> {
-    await this.sessionsService.deleteSession(sessionId);
   }
 }
