@@ -29,4 +29,46 @@ export class StatsController {
   async getSessionCount() {
     return this.statsService.getSessionCount();
   }
+
+  @Get('engagement')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Métricas de engagement (solo desarrollo)' })
+  async getEngagement() {
+    return this.statsService.getEngagementMetrics();
+  }
+
+  @Get('affinity-deep')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Métricas profundas de afinidad (solo desarrollo)' })
+  async getAffinityDeep() {
+    return this.statsService.getAffinityDeepMetrics();
+  }
+
+  @Get('axes-analysis')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Análisis por eje temático (solo desarrollo)' })
+  async getAxesAnalysis() {
+    return this.statsService.getAxesAnalysis();
+  }
+
+  @Get('demographics')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Métricas demográficas cruzadas (solo desarrollo)' })
+  async getDemographics() {
+    return this.statsService.getDemographicsCrossed();
+  }
+
+  @Get('blank-vote')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Análisis del voto en blanco (solo desarrollo)' })
+  async getBlankVote() {
+    return this.statsService.getBlankVoteAnalysis();
+  }
+
+  @Get('preference-flow')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Flujo preferencia vs resultado (solo desarrollo)' })
+  async getPreferenceFlow() {
+    return this.statsService.getPreferenceFlowDetailed();
+  }
 }
