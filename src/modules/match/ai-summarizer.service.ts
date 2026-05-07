@@ -59,10 +59,10 @@ export class AiSummarizerService {
     try {
       const prompt = `Eres un analista político NEUTRAL. El usuario respondió un test de afinidad programática.
 
-Respuestas del usuario (eje → valor 1-5 → importancia 1-3):
+Respuestas del usuario (eje → valor 1-7 → importancia 1-3):
 ${JSON.stringify(input.answers, null, 2)}
 
-Posiciones del candidato ${input.candidateName} (eje → stance 1-5):
+Posiciones del candidato ${input.candidateName} (eje → stance 1-7):
 ${JSON.stringify(input.positions, null, 2)}
 
 Score de afinidad: ${input.score}%
@@ -78,6 +78,7 @@ REGLAS ESTRICTAS:
       const response = await this.client.messages.create({
         model: this.model,
         max_tokens: 200,
+        temperature: 0,
         messages: [{ role: 'user', content: prompt }],
       });
 
@@ -107,7 +108,7 @@ REGLAS ESTRICTAS:
     try {
       const prompt = `Eres un analista político NEUTRAL. Un usuario respondió un test de afinidad programática con estas respuestas:
 
-${stances.map((s) => `- ${AXIS_LABELS[s.axis] || s.axis}: valor ${s.value}/5 (importancia ${s.weight}/3)`).join('\n')}
+${stances.map((s) => `- ${AXIS_LABELS[s.axis] || s.axis}: valor ${s.value}/7 (importancia ${s.weight}/3)`).join('\n')}
 
 Para CADA eje, genera una frase corta (máximo 10 palabras) describiendo la postura del usuario.
 
@@ -120,6 +121,7 @@ REGLAS:
       const response = await this.client.messages.create({
         model: this.model,
         max_tokens: 500,
+        temperature: 0,
         messages: [{ role: 'user', content: prompt }],
       });
 
