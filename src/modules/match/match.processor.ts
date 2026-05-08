@@ -9,7 +9,7 @@ export class MatchProcessor {
 
   constructor(private readonly matchService: MatchService) {}
 
-  @Process('calculate')
+  @Process({ name: 'calculate', concurrency: 25 })
   async handleCalculation(job: Job<{ sessionId: string }>) {
     this.logger.log(`Procesando match para sesión ${job.data.sessionId}`);
     await this.matchService.calculate(job.data.sessionId);

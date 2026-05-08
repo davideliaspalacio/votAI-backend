@@ -5,6 +5,7 @@ import { MatchService } from './match.service';
 import { MatchScoringService } from './match-scoring.service';
 import { AiSummarizerService } from './ai-summarizer.service';
 import { MatchProcessor } from './match.processor';
+import { MatchCleanupCron } from './match-cleanup.cron';
 
 @Module({
   imports: [BullModule.registerQueue({ name: 'match' })],
@@ -14,6 +15,7 @@ import { MatchProcessor } from './match.processor';
     MatchScoringService,
     AiSummarizerService,
     MatchProcessor,
+    MatchCleanupCron,
   ],
   exports: [MatchService],
 })
