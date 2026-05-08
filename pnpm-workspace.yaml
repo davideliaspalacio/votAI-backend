@@ -1,2 +1,0 @@
-ignoredBuiltDependencies:
-  - '@sentry-internal/node-cpu-profiler'
