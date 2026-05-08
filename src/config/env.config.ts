@@ -44,4 +44,7 @@ export const envValidationSchema = Joi.object({
   LOG_LEVEL: Joi.string()
     .valid('trace', 'debug', 'info', 'warn', 'error', 'fatal')
     .default('info'),
+
+  // Observabilidad
+  SENTRY_DSN: Joi.string().optional().allow(''),
 });
