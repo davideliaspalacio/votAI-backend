@@ -76,6 +76,6 @@ export class StatsController {
   @Throttle({ default: { limit: 2, ttl: 60000 } })
   @ApiOperation({ summary: 'Lanza un error de prueba para verificar Sentry' })
   debugSentry() {
-    throw new Error('Sentry test: verificación de captura de errores');
+    throw new Error(`Sentry test ${Date.now()}`);
   }
 }
