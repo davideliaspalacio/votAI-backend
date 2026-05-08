@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
+import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { envValidationSchema } from './config/env.config';
 import { SupabaseModule } from './supabase/supabase.module';
 import { CandidatesModule } from './modules/candidates/candidates.module';
@@ -15,6 +16,7 @@ import { IngestionModule } from './modules/ingestion/ingestion.module';
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: envValidationSchema,
@@ -45,6 +47,10 @@ import { IngestionModule } from './modules/ingestion/ingestion.module';
     IngestionModule,
   ],
   providers: [
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
+    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
