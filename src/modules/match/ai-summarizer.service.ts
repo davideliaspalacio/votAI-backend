@@ -152,7 +152,7 @@ REGLAS:
     return result;
   }
 
-  private templateSummary(input: SummaryInput): string {
+  templateSummary(input: SummaryInput): string {
     const topLabels = input.topAxes
       .map((a) => AXIS_LABELS[a] || a)
       .join(' y ');
@@ -169,7 +169,7 @@ REGLAS:
     }
   }
 
-  private templateStance(axis: string, value: number): string {
+  templateStance(axis: string, value: number): string {
     const label = AXIS_LABELS[axis] || axis;
     if (value <= 2) return `Posición progresista en ${label}`;
     if (value === 3) return `Posición moderada en ${label}`;
