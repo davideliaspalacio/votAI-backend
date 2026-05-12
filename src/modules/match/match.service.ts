@@ -274,74 +274,24 @@ export class MatchService {
       // Calcular scores
       const scores = this.scoringService.calculate(userAnswers, candidatePositions);
 
-      // User stances con templates locales (sin IA — la IA se hace bajo demanda vía enrichWithAi)
-      const userStances = new Map<string, string>();
-      for (const a of userAnswers) {
-        userStances.set(a.axis, this.aiSummarizer.templateStance(a.axis, a.value));
-      }
-
-      // Traer nombres de candidatos
-      const { data: candidateNames } = await db
-        .from('candidates')
-        .select('id, name');
-      const nameMap = new Map((candidateNames ?? []).map((c) => [c.id, c.name]));
-
-      // Preparar datos para resúmenes
-      const summaryInputs = scores.map((score) => {
-        const axisDistSorted = [...score.axisDistances].sort(
-          (a, b) => b.similarity - a.similarity,
-        );
-        const topAxes = axisDistSorted.slice(0, 2).map((a) => a.axis);
-        const bottomAxes = axisDistSorted.slice(-2).map((a) => a.axis);
-        const posDetails = candidatePositionDetails.get(score.candidateId);
-        const posArray = posDetails
-          ? Array.from(posDetails.entries()).map(([axis, detail]) => ({
-              axis,
-              stanceScore: detail.stanceScore,
-              summary: detail.summary,
-            }))
-          : [];
-        return { score, topAxes, bottomAxes, posArray };
-      });
-
-      // Summaries con templates locales para TODOS los candidatos (sin IA)
-      const summaries = new Map<string, string>();
-      for (const s of summaryInputs) {
-        const name = nameMap.get(s.score.candidateId) ?? s.score.candidateId;
-        summaries.set(
-          s.score.candidateId,
-          this.aiSummarizer.templateSummary({
-            candidateName: name,
-            score: s.score.score,
-            answers: userAnswers.map((a) => ({
-              axis: a.axis,
-              value: a.value,
-              weight: a.weight,
-            })),
-            positions: s.posArray,
-            topAxes: s.topAxes,
-            bottomAxes: s.bottomAxes,
-          }),
-        );
-      }
-
       // Determinar preference_match
       const preferenceMatch =
         session?.initial_preference === scores[0]?.candidateId;
 
-      // Insertar match_results
+      // Insertar match_results (sin texto IA; ai_enriched_at queda NULL hasta enrich)
       await db.from('match_results').insert({
         session_id: sessionId,
         preference_match: preferenceMatch,
       });
 
-      // Insertar match_result_candidates
+      // Insertar match_result_candidates SIN summary
+      // (el campo se rellena cuando el usuario invoque /enrich-ai)
       const candidateRows = scores.map((s) => ({
         session_id: sessionId,
         candidate_id: s.candidateId,
         score: s.score,
         rank: s.rank,
-        summary: summaries.get(s.candidateId) ?? '',
+        summary: '',
       }));
       await db.from('match_result_candidates').insert(candidateRows);
 
@@ -372,7 +322,7 @@ export class MatchService {
             session_id: sessionId,
             candidate_id: score.candidateId,
             axis,
-            user_stance: userStances.get(axis) ?? '',
+            user_stance: '',
             candidate_stance: detail.summary,
             quote: detail.quote,
             program_page: detail.programPage ?? null,
