@@ -539,10 +539,22 @@ export class MatchService {
         .eq('candidate_id', candidateId);
     }
 
-    await db
+    // UPDATE condicional: solo escribe si sigue NULL (idempotente contra carrera)
+    const { data: marked } = await db
       .from('match_results')
       .update({ ai_enriched_at: new Date().toISOString() })
-      .eq('session_id', sessionId);
+      .eq('session_id', sessionId)
+      .is('ai_enriched_at', null)
+      .select('ai_enriched_at')
+      .maybeSingle();
+
+    if (!marked) {
+      // Otra request ya marcó como enriquecido; nuestro trabajo se descarta.
+      this.logger.warn(
+        `Match ${sessionId} ya fue enriquecido por otra request paralela`,
+      );
+      return { enriched: true, cached: true };
+    }
 
     this.logger.log(`Match enriquecido con IA para sesión ${sessionId}`);
     return { enriched: true, cached: false };
