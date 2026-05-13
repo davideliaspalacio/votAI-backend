@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { SubmitMatchDto } from './dto/submit-match.dto';
 import { MatchScoringService, UserAnswer } from './match-scoring.service';
@@ -19,6 +20,7 @@ export class MatchService {
     private readonly supabaseService: SupabaseService,
     private readonly scoringService: MatchScoringService,
     private readonly aiSummarizer: AiSummarizerService,
+    private readonly configService: ConfigService,
     @InjectQueue('match') private readonly matchQueue: Queue,
   ) {}
 
@@ -146,7 +148,7 @@ export class MatchService {
     // Traer resultados
     const { data: matchResult } = await db
       .from('match_results')
-      .select('preference_match')
+      .select('preference_match, ai_enriched_at')
       .eq('session_id', sessionId)
       .single();
 
@@ -187,6 +189,7 @@ export class MatchService {
       initial_preference: session.initial_preference,
       results,
       preference_match: matchResult?.preference_match ?? false,
+      ai_enriched: matchResult?.ai_enriched_at != null,
     };
   }
 
@@ -271,87 +274,24 @@ export class MatchService {
       // Calcular scores
       const scores = this.scoringService.calculate(userAnswers, candidatePositions);
 
-      // Generar stances del usuario (una vez, se reusan para todos los candidatos)
-      const userStances = await this.aiSummarizer.generateUserStances(
-        userAnswers.map((a) => ({ axis: a.axis, value: a.value, weight: a.weight })),
-      );
-
-      // Generar resúmenes para top 3 con IA, template para el resto
-      const summaries = new Map<string, string>();
-
-      // Traer nombres de candidatos
-      const { data: candidateNames } = await db
-        .from('candidates')
-        .select('id, name');
-      const nameMap = new Map((candidateNames ?? []).map((c) => [c.id, c.name]));
-
-      // Preparar datos para resúmenes
-      const summaryInputs = scores.map((score) => {
-        const axisDistSorted = [...score.axisDistances].sort(
-          (a, b) => b.similarity - a.similarity,
-        );
-        const topAxes = axisDistSorted.slice(0, 2).map((a) => a.axis);
-        const bottomAxes = axisDistSorted.slice(-2).map((a) => a.axis);
-        const posDetails = candidatePositionDetails.get(score.candidateId);
-        const posArray = posDetails
-          ? Array.from(posDetails.entries()).map(([axis, detail]) => ({
-              axis,
-              stanceScore: detail.stanceScore,
-              summary: detail.summary,
-            }))
-          : [];
-        return { score, topAxes, bottomAxes, posArray };
-      });
-
-      // Top 3: generar resúmenes con IA EN PARALELO
-      const top3 = summaryInputs.filter((s) => s.score.rank <= 3);
-      const top3Results = await Promise.all(
-        top3.map((s) =>
-          this.aiSummarizer.generateCandidateSummary({
-            candidateName: nameMap.get(s.score.candidateId) ?? s.score.candidateId,
-            score: s.score.score,
-            answers: userAnswers.map((a) => ({ axis: a.axis, value: a.value, weight: a.weight })),
-            positions: s.posArray,
-            topAxes: s.topAxes,
-            bottomAxes: s.bottomAxes,
-          }),
-        ),
-      );
-      top3.forEach((s, i) => summaries.set(s.score.candidateId, top3Results[i]));
-
-      // Rank 4+: templates rápidos sin IA
-      for (const s of summaryInputs.filter((s) => s.score.rank > 3)) {
-        const name = nameMap.get(s.score.candidateId) ?? s.score.candidateId;
-        const topLabel = s.topAxes.join(' y ');
-        const bottomLabel = s.bottomAxes.join(' y ');
-        let template: string;
-        if (s.score.score >= 70) {
-          template = `Alta afinidad programática con ${name}. Mayor coincidencia en ${topLabel}.`;
-        } else if (s.score.score >= 40) {
-          template = `Afinidad moderada con ${name}. Coincidencia parcial en ${topLabel}, diferencias en ${bottomLabel}.`;
-        } else {
-          template = `Baja afinidad programática con ${name}. Las mayores diferencias están en ${bottomLabel}.`;
-        }
-        summaries.set(s.score.candidateId, template);
-      }
-
       // Determinar preference_match
       const preferenceMatch =
         session?.initial_preference === scores[0]?.candidateId;
 
-      // Insertar match_results
+      // Insertar match_results (sin texto IA; ai_enriched_at queda NULL hasta enrich)
       await db.from('match_results').insert({
         session_id: sessionId,
         preference_match: preferenceMatch,
       });
 
-      // Insertar match_result_candidates
+      // Insertar match_result_candidates SIN summary
+      // (el campo se rellena cuando el usuario invoque /enrich-ai)
       const candidateRows = scores.map((s) => ({
         session_id: sessionId,
         candidate_id: s.candidateId,
         score: s.score,
         rank: s.rank,
-        summary: summaries.get(s.candidateId) ?? '',
+        summary: '',
       }));
       await db.from('match_result_candidates').insert(candidateRows);
 
@@ -382,7 +322,7 @@ export class MatchService {
             session_id: sessionId,
             candidate_id: score.candidateId,
             axis,
-            user_stance: userStances.get(axis) ?? '',
+            user_stance: '',
             candidate_stance: detail.summary,
             quote: detail.quote,
             program_page: detail.programPage ?? null,
@@ -412,5 +352,211 @@ export class MatchService {
 
       throw error;
     }
+  }
+
+  async enrichWithAi(
+    sessionId: string,
+  ): Promise<{ enriched: boolean; cached?: boolean; reason?: string }> {
+    const db = this.supabaseService.getClient();
+
+    // 1. Validar sesión done
+    const { data: session } = await db
+      .from('sessions')
+      .select('id, status')
+      .eq('id', sessionId)
+      .single();
+    if (!session || session.status !== 'done') {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'SESSION_NOT_READY',
+        message: 'La sesión no está terminada',
+      });
+    }
+
+    // 2. Cache: si ya fue enriquecido, no llamar Claude de nuevo
+    const { data: existing } = await db
+      .from('match_results')
+      .select('ai_enriched_at')
+      .eq('session_id', sessionId)
+      .single();
+    if (existing?.ai_enriched_at) {
+      return { enriched: true, cached: true };
+    }
+
+    // 3. Freno de emergencia: si USE_AI_SUMMARIES=false, no llamar Claude
+    const useAi = this.configService.get<string>('USE_AI_SUMMARIES', 'true');
+    if (useAi === 'false') {
+      return { enriched: false, reason: 'disabled' };
+    }
+
+    // 4. Releer contexto necesario
+    const { data: answers } = await db
+      .from('answers')
+      .select('question_id, value, weight')
+      .eq('session_id', sessionId);
+
+    if (!answers || answers.length === 0) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'NO_ANSWERS',
+        message: 'No se encontraron respuestas para la sesión',
+      });
+    }
+
+    const questionIds = answers.map((a) => a.question_id);
+    const { data: questions } = await db
+      .from('questions')
+      .select('id, axis')
+      .in('id', questionIds);
+    const qMap = new Map(
+      (questions ?? []).map((q) => [q.id, q.axis as string]),
+    );
+
+    const userAnswers: UserAnswer[] = answers.map((a) => ({
+      questionId: a.question_id,
+      axis: qMap.get(a.question_id) ?? '',
+      value: a.value,
+      weight: a.weight,
+    }));
+
+    // 5. Top 3 candidatos
+    const { data: top3 } = await db
+      .from('match_result_candidates')
+      .select('candidate_id, score, rank')
+      .eq('session_id', sessionId)
+      .lte('rank', 3)
+      .order('rank', { ascending: true });
+
+    if (!top3 || top3.length === 0) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'NO_RESULTS',
+        message: 'No se encontraron resultados para la sesión',
+      });
+    }
+
+    // 6. Releer candidate_positions (necesario para topAxes/bottomAxes vía recálculo de scoring)
+    const { data: positions } = await db
+      .from('candidate_positions')
+      .select('candidate_id, axis, summary, stance_score');
+
+    if (!positions || positions.length === 0) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'NO_POSITIONS',
+        message: 'No se encontraron posiciones de candidatos',
+      });
+    }
+
+    const candidatePositions = new Map<string, Map<string, number>>();
+    const candidatePositionSummaries = new Map<
+      string,
+      Map<string, { summary: string; stanceScore: number }>
+    >();
+    for (const pos of positions) {
+      if (!candidatePositions.has(pos.candidate_id)) {
+        candidatePositions.set(pos.candidate_id, new Map());
+        candidatePositionSummaries.set(pos.candidate_id, new Map());
+      }
+      candidatePositions.get(pos.candidate_id)!.set(pos.axis, pos.stance_score);
+      candidatePositionSummaries.get(pos.candidate_id)!.set(pos.axis, {
+        summary: pos.summary,
+        stanceScore: pos.stance_score,
+      });
+    }
+
+    // 7. Recalcular scoring para reconstruir axisDistances
+    const scores = this.scoringService.calculate(userAnswers, candidatePositions);
+    const scoreById = new Map(scores.map((s) => [s.candidateId, s]));
+
+    // 8. Nombres de candidatos top 3
+    const top3Ids = top3.map((c) => c.candidate_id);
+    const { data: candidateNames } = await db
+      .from('candidates')
+      .select('id, name')
+      .in('id', top3Ids);
+    const nameMap = new Map(
+      (candidateNames ?? []).map((c) => [c.id, c.name]),
+    );
+
+    // 9. Llamar Claude
+    const userStancesAi = await this.aiSummarizer.generateUserStances(
+      userAnswers.map((a) => ({
+        axis: a.axis,
+        value: a.value,
+        weight: a.weight,
+      })),
+    );
+
+    const top3Summaries = await Promise.all(
+      top3.map(async (c) => {
+        const score = scoreById.get(c.candidate_id);
+        if (!score) return { candidateId: c.candidate_id, summary: '' };
+        const axisDistSorted = [...score.axisDistances].sort(
+          (a, b) => b.similarity - a.similarity,
+        );
+        const topAxes = axisDistSorted.slice(0, 2).map((a) => a.axis);
+        const bottomAxes = axisDistSorted.slice(-2).map((a) => a.axis);
+        const posDetails = candidatePositionSummaries.get(c.candidate_id);
+        const posArray = posDetails
+          ? Array.from(posDetails.entries()).map(([axis, detail]) => ({
+              axis,
+              stanceScore: detail.stanceScore,
+              summary: detail.summary,
+            }))
+          : [];
+        const summary = await this.aiSummarizer.generateCandidateSummary({
+          candidateName: nameMap.get(c.candidate_id) ?? c.candidate_id,
+          score: score.score,
+          answers: userAnswers.map((a) => ({
+            axis: a.axis,
+            value: a.value,
+            weight: a.weight,
+          })),
+          positions: posArray,
+          topAxes,
+          bottomAxes,
+        });
+        return { candidateId: c.candidate_id, summary };
+      }),
+    );
+
+    // 10. UPDATE en DB
+    for (const [axis, stance] of userStancesAi) {
+      await db
+        .from('match_result_axes')
+        .update({ user_stance: stance })
+        .eq('session_id', sessionId)
+        .eq('axis', axis);
+    }
+
+    for (const { candidateId, summary } of top3Summaries) {
+      if (!summary) continue;
+      await db
+        .from('match_result_candidates')
+        .update({ summary })
+        .eq('session_id', sessionId)
+        .eq('candidate_id', candidateId);
+    }
+
+    // UPDATE condicional: solo escribe si sigue NULL (idempotente contra carrera)
+    const { data: marked } = await db
+      .from('match_results')
+      .update({ ai_enriched_at: new Date().toISOString() })
+      .eq('session_id', sessionId)
+      .is('ai_enriched_at', null)
+      .select('ai_enriched_at')
+      .maybeSingle();
+
+    if (!marked) {
+      // Otra request ya marcó como enriquecido; nuestro trabajo se descarta.
+      this.logger.warn(
+        `Match ${sessionId} ya fue enriquecido por otra request paralela`,
+      );
+      return { enriched: true, cached: true };
+    }
+
+    this.logger.log(`Match enriquecido con IA para sesión ${sessionId}`);
+    return { enriched: true, cached: false };
   }
 }
