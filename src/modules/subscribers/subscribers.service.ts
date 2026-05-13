@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { SubscribeDto } from './dto/subscribe.dto';
+import { UpdateDetailsDto } from './dto/update-details.dto';
 
 @Injectable()
 export class SubscribersService {
@@ -61,6 +62,52 @@ export class SubscribersService {
     }
 
     return { subscribed: true };
+  }
+
+  async updateDetails(
+    dto: UpdateDetailsDto,
+  ): Promise<{ updated: boolean }> {
+    const db = this.supabaseService.getClient();
+    const email = dto.email.trim().toLowerCase();
+
+    const { data: existing } = await db
+      .from('subscribers')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (!existing) {
+      throw new NotFoundException({
+        statusCode: 404,
+        error: 'EMAIL_NOT_FOUND',
+        message: 'Email no encontrado. Primero suscríbete.',
+      });
+    }
+
+    const updates: Record<string, string | null> = {
+      details_updated_at: new Date().toISOString(),
+    };
+    if (dto.name !== undefined) updates.name = dto.name.trim() || null;
+    if (dto.age_range !== undefined) updates.age_range = dto.age_range;
+    if (dto.city !== undefined) updates.city = dto.city.trim() || null;
+    if (dto.occupation !== undefined) updates.occupation = dto.occupation;
+    if (dto.heard_from !== undefined) updates.heard_from = dto.heard_from;
+
+    const { error } = await db
+      .from('subscribers')
+      .update(updates)
+      .eq('id', existing.id);
+
+    if (error) {
+      this.logger.error(`Error actualizando detalles: ${error.message}`);
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'UPDATE_FAILED',
+        message: 'No se pudieron guardar los datos',
+      });
+    }
+
+    return { updated: true };
   }
 
   async unsubscribe(token: string): Promise<{ unsubscribed: boolean }> {
