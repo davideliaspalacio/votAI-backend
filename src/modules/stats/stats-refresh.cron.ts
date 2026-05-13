@@ -25,7 +25,7 @@ export class StatsRefreshCron implements OnModuleInit {
     }, 5000);
   }
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  @Cron(CronExpression.EVERY_HOUR)
   async handleCron() {
     const silence = this.configService.get<boolean>('ELECTORAL_SILENCE', false);
     if (silence) {
