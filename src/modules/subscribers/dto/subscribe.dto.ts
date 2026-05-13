@@ -26,4 +26,10 @@ export class SubscribeDto {
   @IsString()
   @MaxLength(64)
   source?: string;
+
+  // Honeypot — humanos lo dejan vacío, bots lo llenan
+  @ApiProperty({ required: false, description: 'No completar (honeypot)' })
+  @IsOptional()
+  @IsString()
+  website?: string;
 }

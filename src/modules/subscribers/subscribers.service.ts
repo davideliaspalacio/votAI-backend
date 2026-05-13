@@ -7,6 +7,7 @@ import {
 import { SupabaseService } from '../../supabase/supabase.service';
 import { SubscribeDto } from './dto/subscribe.dto';
 import { UpdateDetailsDto } from './dto/update-details.dto';
+import { isDisposableEmail } from './disposable-domains';
 
 @Injectable()
 export class SubscribersService {
@@ -15,6 +16,13 @@ export class SubscribersService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
   async subscribe(dto: SubscribeDto): Promise<{ subscribed: boolean }> {
+    // Honeypot: humanos lo dejan vacío. Si llega con valor, descartamos silenciosamente
+    // (devolvemos OK para no dar pistas al bot).
+    if (dto.website && dto.website.trim().length > 0) {
+      this.logger.warn(`Honeypot disparado para ${dto.email}`);
+      return { subscribed: true };
+    }
+
     if (!dto.consent) {
       throw new BadRequestException({
         statusCode: 400,
@@ -23,8 +31,17 @@ export class SubscribersService {
       });
     }
 
-    const db = this.supabaseService.getClient();
     const email = dto.email.trim().toLowerCase();
+
+    if (isDisposableEmail(email)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'DISPOSABLE_EMAIL',
+        message: 'Por favor usa un email permanente, no desechable',
+      });
+    }
+
+    const db = this.supabaseService.getClient();
 
     const { data: existing } = await db
       .from('subscribers')
