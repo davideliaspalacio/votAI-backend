@@ -47,4 +47,7 @@ export const envValidationSchema = Joi.object({
 
   // Observabilidad
   SENTRY_DSN: Joi.string().optional().allow(''),
+
+  // Notificaciones Discord
+  DISCORD_SUBSCRIBERS_WEBHOOK_URL: Joi.string().optional().allow(''),
 });

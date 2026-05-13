@@ -13,6 +13,7 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { MatchModule } from './modules/match/match.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { IngestionModule } from './modules/ingestion/ingestion.module';
+import { SubscribersModule } from './modules/subscribers/subscribers.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { IngestionModule } from './modules/ingestion/ingestion.module';
     MatchModule,
     StatsModule,
     IngestionModule,
+    SubscribersModule,
   ],
   providers: [
     {
