@@ -4,16 +4,25 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { SubscribeDto } from './dto/subscribe.dto';
 import { UpdateDetailsDto } from './dto/update-details.dto';
 import { isDisposableEmail } from './disposable-domains';
+import { notifyDiscord } from './discord-notifier';
 
 @Injectable()
 export class SubscribersService {
   private readonly logger = new Logger(SubscribersService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private get discordWebhook(): string | undefined {
+    return this.configService.get<string>('DISCORD_SUBSCRIBERS_WEBHOOK_URL');
+  }
 
   async subscribe(dto: SubscribeDto): Promise<{ subscribed: boolean }> {
     // Honeypot: humanos lo dejan vacío. Si llega con valor, descartamos silenciosamente
@@ -78,6 +87,26 @@ export class SubscribersService {
       });
     }
 
+    // Notificación a Discord (fire-and-forget)
+    void notifyDiscord(this.discordWebhook, {
+      username: 'VotoLoco Suscriptores',
+      embeds: [
+        {
+          title: '🆕 Nueva suscripción',
+          color: 0xfbbf24,
+          fields: [
+            { name: '📧 Email', value: email, inline: false },
+            {
+              name: '📍 Fuente',
+              value: dto.source ?? 'desconocida',
+              inline: true,
+            },
+          ],
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    });
+
     return { subscribed: true };
   }
 
@@ -123,6 +152,36 @@ export class SubscribersService {
         message: 'No se pudieron guardar los datos',
       });
     }
+
+    // Notificación a Discord con los datos opcionales que llenó
+    const fields: { name: string; value: string; inline?: boolean }[] = [
+      { name: '📧 Email', value: email, inline: false },
+    ];
+    if (dto.name) fields.push({ name: '👤 Nombre', value: dto.name, inline: true });
+    if (dto.age_range)
+      fields.push({ name: '🎂 Edad', value: dto.age_range, inline: true });
+    if (dto.city)
+      fields.push({ name: '🏙️ Ciudad', value: dto.city, inline: true });
+    if (dto.occupation)
+      fields.push({ name: '💼 Profesión', value: dto.occupation, inline: true });
+    if (dto.heard_from)
+      fields.push({
+        name: '📲 Nos conoció por',
+        value: dto.heard_from,
+        inline: true,
+      });
+
+    void notifyDiscord(this.discordWebhook, {
+      username: 'VotoLoco Suscriptores',
+      embeds: [
+        {
+          title: '📊 Datos completos del suscriptor',
+          color: 0x22c55e,
+          fields,
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    });
 
     return { updated: true };
   }
