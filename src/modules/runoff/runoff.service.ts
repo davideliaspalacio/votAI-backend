@@ -305,7 +305,7 @@ export class RunoffService {
 
     const { data: session, error: sessErr } = await db
       .from('sv_sessions')
-      .select('id, status, runoff_intention, first_round_vote, would_change_vote')
+      .select('id, status, runoff_intention, first_round_vote, vote_choice')
       .eq('id', sessionId)
       .single();
 
@@ -377,7 +377,7 @@ export class RunoffService {
       results,
       preference_match: matchResult?.preference_match ?? false,
       ai_enriched: matchResult?.ai_enriched_at != null,
-      would_change_vote: session.would_change_vote ?? null,
+      vote_choice: session.vote_choice ?? null,
       blank_pct: blankPct,
     };
   }
@@ -716,10 +716,10 @@ export class RunoffService {
 
   // ------------------ Feedback opcional ----------------
 
-  /** Guarda (opcional) si la persona reconsideraría su voto. */
+  /** Guarda (opcional) si la persona se va por afinidad o por intención de voto. */
   async submitVoteFeedback(
     sessionId: string,
-    wouldChange: 'yes' | 'no',
+    voteChoice: 'affinity' | 'intention',
   ): Promise<{ saved: boolean }> {
     const db = this.supabaseService.getClient();
 
@@ -738,7 +738,7 @@ export class RunoffService {
 
     const { error } = await db
       .from('sv_sessions')
-      .update({ would_change_vote: wouldChange })
+      .update({ vote_choice: voteChoice })
       .eq('id', sessionId);
     if (error) throw error;
 

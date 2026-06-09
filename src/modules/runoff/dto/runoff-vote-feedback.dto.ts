@@ -1,18 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum } from 'class-validator';
 
-export enum WouldChangeVote {
-  yes = 'yes',
-  no = 'no',
+export enum VoteChoice {
+  // Se va por el plan con el que más coincide (afinidad programática).
+  affinity = 'affinity',
+  // Mantiene su intención de voto original.
+  intention = 'intention',
 }
 
 export class RunoffVoteFeedbackDto {
   @ApiProperty({
-    enum: WouldChangeVote,
-    example: 'yes',
+    enum: VoteChoice,
+    example: 'affinity',
     description:
-      'Si reconsideraría su voto tras ver que su afinidad no coincide con su intención',
+      'A la hora de votar, ¿sigue su afinidad programática o su intención de voto?',
   })
-  @IsEnum(WouldChangeVote)
-  wouldChange!: WouldChangeVote;
+  @IsEnum(VoteChoice)
+  voteChoice!: VoteChoice;
 }
