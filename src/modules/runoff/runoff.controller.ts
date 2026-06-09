@@ -25,6 +25,7 @@ import {
   RunoffMatchStatusResponseDto,
   RunoffMatchResultResponseDto,
 } from './dto/runoff-response.dto';
+import { RunoffVoteFeedbackDto } from './dto/runoff-vote-feedback.dto';
 
 @ApiTags('runoff')
 @Controller('runoff')
@@ -99,5 +100,22 @@ export class RunoffController {
     @Param('sessionId') sessionId: string,
   ): Promise<{ enriched: boolean; cached?: boolean; reason?: string }> {
     return this.runoffService.enrichWithAi(sessionId);
+  }
+
+  @Post('match/:sessionId/vote-feedback')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Guarda (opcional) si la persona reconsideraría su voto tras ver su afinidad',
+  })
+  @ApiParam({ name: 'sessionId' })
+  @ApiResponse({ status: 200, description: 'Respuesta guardada' })
+  @ApiResponse({ status: 404, description: 'Sesión no encontrada' })
+  async voteFeedback(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: RunoffVoteFeedbackDto,
+  ): Promise<{ saved: boolean }> {
+    return this.runoffService.submitVoteFeedback(sessionId, dto.wouldChange);
   }
 }
