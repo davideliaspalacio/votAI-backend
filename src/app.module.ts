@@ -14,6 +14,7 @@ import { MatchModule } from './modules/match/match.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { IngestionModule } from './modules/ingestion/ingestion.module';
 import { SubscribersModule } from './modules/subscribers/subscribers.module';
+import { RunoffModule } from './modules/runoff/runoff.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SubscribersModule } from './modules/subscribers/subscribers.module';
     StatsModule,
     IngestionModule,
     SubscribersModule,
+    RunoffModule,
   ],
   providers: [
     {
