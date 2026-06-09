@@ -305,7 +305,7 @@ export class RunoffService {
 
     const { data: session, error: sessErr } = await db
       .from('sv_sessions')
-      .select('id, status, runoff_intention, first_round_vote')
+      .select('id, status, runoff_intention, first_round_vote, would_change_vote')
       .eq('id', sessionId)
       .single();
 
@@ -367,6 +367,7 @@ export class RunoffService {
       results,
       preference_match: matchResult?.preference_match ?? false,
       ai_enriched: matchResult?.ai_enriched_at != null,
+      would_change_vote: session.would_change_vote ?? null,
     };
   }
 
@@ -700,5 +701,36 @@ export class RunoffService {
       `Match de segunda vuelta enriquecido con IA para sesión ${sessionId}`,
     );
     return { enriched: true, cached: false };
+  }
+
+  // ------------------ Feedback opcional ----------------
+
+  /** Guarda (opcional) si la persona reconsideraría su voto. */
+  async submitVoteFeedback(
+    sessionId: string,
+    wouldChange: 'yes' | 'no',
+  ): Promise<{ saved: boolean }> {
+    const db = this.supabaseService.getClient();
+
+    const { data: session } = await db
+      .from('sv_sessions')
+      .select('id')
+      .eq('id', sessionId)
+      .single();
+    if (!session) {
+      throw new NotFoundException({
+        statusCode: 404,
+        error: 'SESSION_NOT_FOUND',
+        message: `Sesión "${sessionId}" no encontrada`,
+      });
+    }
+
+    const { error } = await db
+      .from('sv_sessions')
+      .update({ would_change_vote: wouldChange })
+      .eq('id', sessionId);
+    if (error) throw error;
+
+    return { saved: true };
   }
 }
