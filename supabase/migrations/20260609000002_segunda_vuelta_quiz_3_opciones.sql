@@ -6,12 +6,13 @@
 -- solo hay 2 planes, así que cada pregunta queda con 3 opciones, A CIEGAS:
 --   1) la postura del plan de Iván Cepeda (c1)
 --   2) la postura del plan de Abelardo de la Espriella (c2)
---   3) voto en blanco (neutral)
+--   3) una postura escéptica propia del tema (no convence ninguno de los dos)
 --
--- El "value" de cada opción = stance_score real del candidato en ese eje
--- (de sv_candidate_positions), de modo que elegir un plan da 100% de afinidad
--- con ese plan en ese eje — el scoring por distancia ya existente lo calcula
--- sin cambios. El voto en blanco usa 4 (neutro = punto medio de la escala 1-7).
+-- El "value" de las opciones de plan = stance_score real del candidato en ese
+-- eje (de sv_candidate_positions), de modo que elegir un plan da 100% de
+-- afinidad con ese plan — el scoring por distancia ya existente lo calcula sin
+-- cambios. La tercera opción usa 4 (neutro = punto medio de la escala 1-7), así
+-- que cuenta como "ninguno de los dos" sin decir literalmente "voto en blanco".
 -- El orden de las dos posturas se alterna por pregunta para no inducir sesgo.
 --
 -- Idempotente vía UPDATE por id: corrige tanto instalaciones nuevas como las
@@ -25,7 +26,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Reforma tributaria progresiva, banca pública fuerte y redistribuir la riqueza.", "value": 1},
     {"label": "Reducir el Estado y los impuestos, y desregular para atraer inversión privada.", "value": 7},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "El problema no es el modelo, sino la corrupción y el mal gasto del Estado.", "value": 4}
   ]'::jsonb
 WHERE id = 'q1';
 
@@ -36,7 +37,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Más competencia entre prestadores y subsidios focalizados a quien lo necesita.", "value": 6},
     {"label": "Sistema público universal sin EPS, con atención primaria en los territorios.", "value": 1},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "Mientras no se acabe la corrupción en la salud, ningún modelo va a funcionar.", "value": 4}
   ]'::jsonb
 WHERE id = 'q2';
 
@@ -47,7 +48,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Gratuidad total en la educación superior pública y mejores salarios docentes.", "value": 1},
     {"label": "Vouchers y libertad de elegir colegio, con fuerte apuesta por la educación técnica.", "value": 6},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "Sin un manejo serio de los recursos, cualquier promesa educativa es un eslogan.", "value": 4}
   ]'::jsonb
 WHERE id = 'q3';
 
@@ -58,7 +59,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Mano dura: más fuerza pública, régimen de excepción y cárceles de máxima seguridad.", "value": 7},
     {"label": "Paz total: cumplir los acuerdos e invertir en lo social en los territorios.", "value": 1},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "Ni mano dura ni paz total han funcionado; falta presencia real del Estado.", "value": 4}
   ]'::jsonb
 WHERE id = 'q4';
 
@@ -69,7 +70,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Prohibir la minería en páramos y acelerar la transición a energías limpias.", "value": 7},
     {"label": "Aprovechar los recursos con minería responsable como motor de la economía.", "value": 1},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "Las promesas ambientales no sobreviven al primer año de gobierno.", "value": 4}
   ]'::jsonb
 WHERE id = 'q5';
 
@@ -80,7 +81,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Subsidios temporales y condicionados; el empleo formal como la verdadera ayuda social.", "value": 1},
     {"label": "Renta básica para los más vulnerables, reforma agraria y economía del cuidado.", "value": 7},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "Los subsidios, como están, no sacan a nadie de la pobreza de raíz.", "value": 4}
   ]'::jsonb
 WHERE id = 'q6';
 
@@ -91,7 +92,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Integración latinoamericana y diplomacia de paz, más allá de EE.UU.", "value": 6},
     {"label": "Alianza firme con EE.UU. e Israel y línea dura con Venezuela.", "value": 1},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "La política exterior no debería cambiar con cada presidente de turno.", "value": 4}
   ]'::jsonb
 WHERE id = 'q7';
 
@@ -102,7 +103,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Reducir el Congreso a la mitad y revocatoria de mandato exprés.", "value": 1},
     {"label": "Reforma profunda: listas cerradas paritarias y financiación estatal de campañas.", "value": 7},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "Ninguna reforma sirve si la hacen los mismos políticos de siempre.", "value": 4}
   ]'::jsonb
 WHERE id = 'q8';
 
@@ -113,7 +114,7 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Empleos verdes, economía del cuidado remunerada y formalizar la economía popular.", "value": 7},
     {"label": "Flexibilizar la contratación, bajar costos laborales y crear zonas francas de empleo.", "value": 1},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "Las promesas de empleo nunca se cumplen y no tienen con qué financiarse.", "value": 4}
   ]'::jsonb
 WHERE id = 'q9';
 
@@ -124,6 +125,6 @@ UPDATE sv_questions SET
   options = '[
     {"label": "Colombia como hub tech con cero impuestos a startups y vigilancia con IA.", "value": 6},
     {"label": "Soberanía digital e internet como servicio público en las zonas rurales.", "value": 2},
-    {"label": "Ninguna me convence — voto en blanco.", "value": 4}
+    {"label": "Las propuestas de tecnología son más marketing de campaña que plan real.", "value": 4}
   ]'::jsonb
 WHERE id = 'q10';
