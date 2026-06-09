@@ -12,13 +12,22 @@ export class StatsService {
   ) {}
 
   async getSessionCount() {
-    const { count } = await this.supabaseService
-      .getClient()
-      .from('sessions')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'done');
+    const db = this.supabaseService.getClient();
 
-    return { total_sessions: count ?? 0 };
+    // Total = tests completados de primera vuelta (sessions) + segunda vuelta
+    // (sv_sessions). Así el contador del home sigue creciendo con el nuevo test.
+    const [primera, segunda] = await Promise.all([
+      db
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'done'),
+      db
+        .from('sv_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'done'),
+    ]);
+
+    return { total_sessions: (primera.count ?? 0) + (segunda.count ?? 0) };
   }
 
   async getPublicStats() {
