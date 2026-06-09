@@ -360,6 +360,16 @@ export class RunoffService {
       })),
     }));
 
+    // % de voto en blanco: temas donde eligió la opción neutral (value 4),
+    // es decir, "ninguno de los dos planes".
+    const { data: answerRows } = await db
+      .from('sv_answers')
+      .select('value')
+      .eq('session_id', sessionId);
+    const totalAns = answerRows?.length ?? 0;
+    const blankAns = (answerRows ?? []).filter((a) => a.value === 4).length;
+    const blankPct = totalAns > 0 ? Math.round((blankAns / totalAns) * 100) : 0;
+
     return {
       status: 'done',
       runoff_intention: session.runoff_intention,
@@ -368,6 +378,7 @@ export class RunoffService {
       preference_match: matchResult?.preference_match ?? false,
       ai_enriched: matchResult?.ai_enriched_at != null,
       would_change_vote: session.would_change_vote ?? null,
+      blank_pct: blankPct,
     };
   }
 
