@@ -107,7 +107,7 @@ export class RunoffController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary:
-      'Guarda (opcional) si la persona reconsideraría su voto tras ver su afinidad',
+      'Guarda (opcional) si la persona se va por afinidad o por intención de voto',
   })
   @ApiParam({ name: 'sessionId' })
   @ApiResponse({ status: 200, description: 'Respuesta guardada' })
@@ -116,6 +116,6 @@ export class RunoffController {
     @Param('sessionId') sessionId: string,
     @Body() dto: RunoffVoteFeedbackDto,
   ): Promise<{ saved: boolean }> {
-    return this.runoffService.submitVoteFeedback(sessionId, dto.wouldChange);
+    return this.runoffService.submitVoteFeedback(sessionId, dto.voteChoice);
   }
 }
