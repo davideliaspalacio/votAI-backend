@@ -81,7 +81,11 @@ export class RunoffMatchResultResponseDto {
   @ApiProperty({ example: 'c3' })
   first_round_vote!: string;
 
-  @ApiProperty({ type: [RunoffCandidateResultDto] })
+  @ApiProperty({
+    type: [RunoffCandidateResultDto],
+    description:
+      'Afinidad de cada plan, ya normalizada: score(c1) + score(c2) + blank_pct = 100.',
+  })
   results!: RunoffCandidateResultDto[];
 
   @ApiProperty({ example: false })
@@ -89,4 +93,10 @@ export class RunoffMatchResultResponseDto {
 
   @ApiProperty({ example: false })
   ai_enriched!: boolean;
+
+  @ApiProperty({
+    example: 0,
+    description: '% de temas en voto en blanco (opción neutral). Cierra el 100%.',
+  })
+  blank_pct!: number;
 }
