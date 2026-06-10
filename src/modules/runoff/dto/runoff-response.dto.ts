@@ -84,7 +84,7 @@ export class RunoffMatchResultResponseDto {
   @ApiProperty({
     type: [RunoffCandidateResultDto],
     description:
-      'Afinidad de cada plan, ya normalizada: score(c1) + score(c2) + blank_pct = 100.',
+      'Afinidad REAL de cada plan por distancia (0-100), medida de forma independiente. Son medidas separadas: score(c1) + score(c2) + blank_pct puede superar 100.',
   })
   results!: RunoffCandidateResultDto[];
 
@@ -96,7 +96,8 @@ export class RunoffMatchResultResponseDto {
 
   @ApiProperty({
     example: 0,
-    description: '% de temas en voto en blanco (opción neutral). Cierra el 100%.',
+    description:
+      '% de temas en voto en blanco (opción neutral). Dato independiente de la afinidad de cada plan.',
   })
   blank_pct!: number;
 }
