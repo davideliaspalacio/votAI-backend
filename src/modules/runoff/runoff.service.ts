@@ -370,6 +370,25 @@ export class RunoffService {
     const blankAns = (answerRows ?? []).filter((a) => a.value === 4).length;
     const blankPct = totalAns > 0 ? Math.round((blankAns / totalAns) * 100) : 0;
 
+    // Afinidad normalizada para que los dos planes + el voto en blanco sumen
+    // exactamente 100. El modelo de distancia calcula la afinidad de cada plan
+    // por separado (cada una 0-100), así que pueden sumar >100 y, con el voto en
+    // blanco aparte, superar el 100% en pantalla. Reparto fiel al modelo: el voto
+    // en blanco conserva su valor real (% de temas neutrales) y el espacio
+    // restante (100 - blank_pct) se divide entre los dos planes respetando
+    // exactamente la razón de afinidad original. No se toca el score almacenado
+    // (rank, preference_match e IA siguen usando el valor crudo).
+    if (results.length === 2) {
+      const decided = 100 - blankPct;
+      const rawTotal = results[0].score + results[1].score;
+      const firstShare =
+        rawTotal > 0
+          ? Math.round((decided * results[0].score) / rawTotal)
+          : Math.round(decided / 2);
+      results[0].score = firstShare;
+      results[1].score = decided - firstShare;
+    }
+
     return {
       status: 'done',
       runoff_intention: session.runoff_intention,
