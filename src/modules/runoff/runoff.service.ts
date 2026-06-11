@@ -347,11 +347,56 @@ export class RunoffService {
       axesByCandidate.set(ax.candidate_id, existing);
     }
 
-    const results = (candidates ?? []).map((c) => ({
-      candidateId: c.candidate_id,
-      score: c.score,
-      summary: c.summary,
-      byAxis: (axesByCandidate.get(c.candidate_id) ?? []).map((ax) => ({
+    // Reparto de afinidad recalculado desde las respuestas, para que la suma
+    // (Cepeda + Abelardo + voto en blanco) sea siempre 100 — también en
+    // sesiones antiguas guardadas con el modelo anterior de afinidad
+    // independiente (que podía pasar de 100).
+    const { data: answerRows } = await db
+      .from('sv_answers')
+      .select('question_id, value, weight')
+      .eq('session_id', sessionId);
+
+    const answerQuestionIds = (answerRows ?? []).map((a) => a.question_id);
+    const { data: answerQuestions } = await db
+      .from('sv_questions')
+      .select('id, axis')
+      .in('id', answerQuestionIds.length ? answerQuestionIds : ['']);
+    const answerAxisMap = new Map(
+      (answerQuestions ?? []).map((q) => [q.id, q.axis as string]),
+    );
+
+    const { data: positionRows } = await db
+      .from('sv_candidate_positions')
+      .select('candidate_id, axis, stance_score');
+    const candidatePositions = new Map<string, Map<string, number>>();
+    for (const pos of positionRows ?? []) {
+      if (!candidatePositions.has(pos.candidate_id)) {
+        candidatePositions.set(pos.candidate_id, new Map());
+      }
+      candidatePositions.get(pos.candidate_id)!.set(pos.axis, pos.stance_score);
+    }
+
+    const userAnswers: UserAnswer[] = (answerRows ?? []).map((a) => ({
+      questionId: a.question_id,
+      axis: answerAxisMap.get(a.question_id) ?? '',
+      value: a.value,
+      weight: a.weight,
+    }));
+
+    const { ranked, blankPct } = this.computeRunoffDistribution(
+      userAnswers,
+      candidatePositions,
+    );
+
+    const summaryByCandidate = new Map(
+      (candidates ?? []).map((c) => [c.candidate_id, c.summary as string]),
+    );
+
+    const results = ranked.map((r) => ({
+      candidateId: r.candidateId,
+      score: r.score,
+      summary: summaryByCandidate.get(r.candidateId) ?? '',
+      byAxis: (axesByCandidate.get(r.candidateId) ?? []).map((ax) => ({
         axis: ax.axis,
         userStance: ax.user_stance,
         candidateStance: ax.candidate_stance,
@@ -360,22 +405,17 @@ export class RunoffService {
       })),
     }));
 
-    // % de voto en blanco: temas donde eligió la opción neutral (value 4),
-    // es decir, "ninguno de los dos planes".
-    const { data: answerRows } = await db
-      .from('sv_answers')
-      .select('value')
-      .eq('session_id', sessionId);
-    const totalAns = answerRows?.length ?? 0;
-    const blankAns = (answerRows ?? []).filter((a) => a.value === 4).length;
-    const blankPct = totalAns > 0 ? Math.round((blankAns / totalAns) * 100) : 0;
+    // La intención coincide con la afinidad si el candidato más afín (top del
+    // reparto) es justo el que la persona pensaba votar.
+    const preferenceMatch =
+      session.runoff_intention === ranked[0]?.candidateId;
 
     return {
       status: 'done',
       runoff_intention: session.runoff_intention,
       first_round_vote: session.first_round_vote,
       results,
-      preference_match: matchResult?.preference_match ?? false,
+      preference_match: preferenceMatch,
       ai_enriched: matchResult?.ai_enriched_at != null,
       vote_choice: session.vote_choice ?? null,
       blank_pct: blankPct,
@@ -452,7 +492,10 @@ export class RunoffService {
         weight: a.weight,
       }));
 
-      const scores = this.scoringService.calculate(userAnswers, candidatePositions);
+      const { ranked: scores } = this.computeRunoffDistribution(
+        userAnswers,
+        candidatePositions,
+      );
 
       const preferenceMatch =
         session?.runoff_intention === scores[0]?.candidateId;
@@ -521,6 +564,80 @@ export class RunoffService {
 
       throw error;
     }
+  }
+
+  /**
+   * Reparto de afinidad de segunda vuelta. Por cada tema, el peso de la
+   * pregunta va a quien la persona eligió (el candidato cuya postura coincide
+   * con su respuesta) o a "voto en blanco" (opción neutral, value 4). Devuelve
+   * porcentajes que SUMAN exactamente 100 (Cepeda + Abelardo + voto en blanco),
+   * nunca más.
+   */
+  private computeRunoffDistribution(
+    userAnswers: UserAnswer[],
+    candidatePositions: Map<string, Map<string, number>>,
+  ): {
+    ranked: { candidateId: string; score: number; rank: number }[];
+    blankPct: number;
+  } {
+    const candIds = Array.from(candidatePositions.keys());
+    const weights = new Map<string, number>(candIds.map((id) => [id, 0]));
+    let blankWeight = 0;
+
+    for (const a of userAnswers) {
+      // value 4 = opción neutral = "ninguno de los dos" (voto en blanco).
+      if (a.value === 4) {
+        blankWeight += a.weight;
+        continue;
+      }
+      // Asigna el peso al candidato cuya postura está más cerca de la
+      // respuesta (en el quiz de 3 opciones la coincidencia es exacta).
+      let bestId: string | null = null;
+      let bestDist = Infinity;
+      for (const id of candIds) {
+        const stance = candidatePositions.get(id)?.get(a.axis);
+        if (stance === undefined) continue;
+        const dist = Math.abs(a.value - stance);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestId = id;
+        }
+      }
+      if (bestId) weights.set(bestId, (weights.get(bestId) ?? 0) + a.weight);
+      else blankWeight += a.weight;
+    }
+
+    const totalWeight =
+      candIds.reduce((sum, id) => sum + (weights.get(id) ?? 0), 0) +
+        blankWeight || 1;
+
+    // Reparto en enteros que suman exactamente 100 (el resto del redondeo va
+    // al cubo de mayor valor, para que nunca pase de 100 ni quede negativo).
+    const buckets = [
+      ...candIds.map((id) => ({
+        id,
+        raw: ((weights.get(id) ?? 0) / totalWeight) * 100,
+      })),
+      { id: '__blank__', raw: (blankWeight / totalWeight) * 100 },
+    ];
+    const rounded = buckets.map((b) => ({ ...b, pct: Math.round(b.raw) }));
+    const drift = 100 - rounded.reduce((sum, b) => sum + b.pct, 0);
+    if (drift !== 0 && rounded.length > 0) {
+      let maxIdx = 0;
+      rounded.forEach((b, i) => {
+        if (b.raw > rounded[maxIdx].raw) maxIdx = i;
+      });
+      rounded[maxIdx].pct += drift;
+    }
+
+    const blankPct = rounded.find((b) => b.id === '__blank__')?.pct ?? 0;
+    const ranked = rounded
+      .filter((b) => b.id !== '__blank__')
+      .map((b) => ({ candidateId: b.id, score: b.pct }))
+      .sort((a, b) => b.score - a.score)
+      .map((s, i) => ({ ...s, rank: i + 1 }));
+
+    return { ranked, blankPct };
   }
 
   // ------------------ Enriquecimiento IA ----------------
@@ -630,6 +747,14 @@ export class RunoffService {
 
     const scores = this.scoringService.calculate(userAnswers, candidatePositions);
     const scoreById = new Map(scores.map((s) => [s.candidateId, s]));
+    // El % que cita la IA es el del reparto (suma 100), para que cuadre con lo
+    // que ve la persona. Las distancias por eje (arriba) solo se usan para
+    // elegir los temas de mayor/menor coincidencia del relato.
+    const { ranked: reparto } = this.computeRunoffDistribution(
+      userAnswers,
+      candidatePositions,
+    );
+    const repartoById = new Map(reparto.map((r) => [r.candidateId, r.score]));
 
     const candidateIds = resultCandidates.map((c) => c.candidate_id);
     const { data: candidateNames } = await db
@@ -661,7 +786,7 @@ export class RunoffService {
           : [];
         const summary = await this.aiSummarizer.generateCandidateSummary({
           candidateName: nameMap.get(c.candidate_id) ?? c.candidate_id,
-          score: score.score,
+          score: repartoById.get(c.candidate_id) ?? score.score,
           answers: userAnswers.map((a) => ({
             axis: a.axis,
             value: a.value,
