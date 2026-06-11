@@ -305,7 +305,9 @@ export class RunoffService {
 
     const { data: session, error: sessErr } = await db
       .from('sv_sessions')
-      .select('id, status, runoff_intention, first_round_vote, vote_choice')
+      .select(
+        'id, status, runoff_intention, first_round_vote, vote_choice, age_range, region, gender, estrato, academic_level',
+      )
       .eq('id', sessionId)
       .single();
 
@@ -385,6 +387,14 @@ export class RunoffService {
       ai_enriched: matchResult?.ai_enriched_at != null,
       vote_choice: session.vote_choice ?? null,
       blank_pct: blankPct,
+      // Demográficos del test, para adjuntarlos al suscribirse (solo demográficos).
+      demographics: {
+        age_range: session.age_range,
+        region: session.region,
+        gender: session.gender,
+        estrato: session.estrato,
+        academic_level: session.academic_level,
+      },
     };
   }
 
