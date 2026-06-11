@@ -27,6 +27,38 @@ export class SubscribeDto {
   @MaxLength(64)
   source?: string;
 
+  // Datos demográficos del test (opt-in), adjuntados desde los resultados.
+  // SOLO demográficos: nunca el voto ni las respuestas. Todos opcionales.
+  @ApiProperty({ required: false, example: '25-34' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  age_range?: string;
+
+  @ApiProperty({ required: false, example: 'andina' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  region?: string;
+
+  @ApiProperty({ required: false, example: 'f' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  gender?: string;
+
+  @ApiProperty({ required: false, example: '3' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  estrato?: string;
+
+  @ApiProperty({ required: false, example: 'universitario' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  academic_level?: string;
+
   // Honeypot — humanos lo dejan vacío, bots lo llenan
   @ApiProperty({ required: false, description: 'No completar (honeypot)' })
   @IsOptional()

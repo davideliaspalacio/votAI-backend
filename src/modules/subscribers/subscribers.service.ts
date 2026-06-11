@@ -50,6 +50,16 @@ export class SubscribersService {
       });
     }
 
+    // Demográficos del test (opt-in): solo se incluyen los que llegan. Nunca
+    // voto ni respuestas ni session_id → anonimato de las respuestas intacto.
+    const demographics: Record<string, string> = {};
+    if (dto.age_range) demographics.age_range = dto.age_range;
+    if (dto.region) demographics.region = dto.region;
+    if (dto.gender) demographics.gender = dto.gender;
+    if (dto.estrato) demographics.estrato = dto.estrato;
+    if (dto.academic_level) demographics.academic_level = dto.academic_level;
+    const hasDemographics = Object.keys(demographics).length > 0;
+
     const db = this.supabaseService.getClient();
 
     const { data: existing } = await db
@@ -66,9 +76,13 @@ export class SubscribersService {
             unsubscribed_at: null,
             subscribed_at: new Date().toISOString(),
             source: dto.source ?? null,
+            ...demographics,
           })
           .eq('id', existing.id);
         this.logger.log(`Resuscripción de ${email}`);
+      } else if (hasDemographics) {
+        // Ya suscrito: completamos demográficos si llegaron (sin pisar con null).
+        await db.from('subscribers').update(demographics).eq('id', existing.id);
       }
       return { subscribed: true };
     }
@@ -76,6 +90,7 @@ export class SubscribersService {
     const { error } = await db.from('subscribers').insert({
       email,
       source: dto.source ?? null,
+      ...demographics,
     });
 
     if (error) {
@@ -88,20 +103,32 @@ export class SubscribersService {
     }
 
     // Notificación a Discord (fire-and-forget)
+    const newSubFields: { name: string; value: string; inline?: boolean }[] = [
+      { name: '📧 Email', value: email, inline: false },
+      { name: '📍 Fuente', value: dto.source ?? 'desconocida', inline: true },
+    ];
+    if (dto.age_range)
+      newSubFields.push({ name: '🎂 Edad', value: dto.age_range, inline: true });
+    if (dto.region)
+      newSubFields.push({ name: '🗺️ Región', value: dto.region, inline: true });
+    if (dto.gender)
+      newSubFields.push({ name: '⚧ Género', value: dto.gender, inline: true });
+    if (dto.estrato)
+      newSubFields.push({ name: '🏠 Estrato', value: dto.estrato, inline: true });
+    if (dto.academic_level)
+      newSubFields.push({
+        name: '🎓 Nivel educativo',
+        value: dto.academic_level,
+        inline: true,
+      });
+
     void notifyDiscord(this.discordWebhook, {
       username: 'VotoLoco Suscriptores',
       embeds: [
         {
           title: '🆕 Nueva suscripción',
           color: 0xfbbf24,
-          fields: [
-            { name: '📧 Email', value: email, inline: false },
-            {
-              name: '📍 Fuente',
-              value: dto.source ?? 'desconocida',
-              inline: true,
-            },
-          ],
+          fields: newSubFields,
           timestamp: new Date().toISOString(),
         },
       ],
